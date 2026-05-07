@@ -47,21 +47,21 @@ class Decoder:
             raise RuntimeError("unexpected token: {0} at index {1}".format(str(c), str(self._indx)))
 
     
-    def _next(self, cnt = 1):
+    def _next(self):
         """
-        Reads the next cnt byte(s) from the bencoded data
+        checks the next byte from the bencoded data
         """
-        if self._indx + cnt > len(self._data):
+        if self._indx + 1 >= len(self._data):
             return None
-        return self._data[self._indx : self._indx + cnt]
+        return self._data[self._indx : self._indx + 1]
     
-    def _progress(self, cnt = 1):
+    def _progress(self, cnt : int = 1):
         """
         Progresses to the next byte of the data
         """
         self._indx += cnt
 
-    def _read(self, delim):
+    def _read_delim(self, delim : bytes):
         """
         Reads until the delimmiter and progresses
         """
@@ -72,12 +72,19 @@ class Decoder:
             return data
         except ValueError:
             raise RuntimeError('unable to find token {0}'.format(str(delim)))
+    def _read(self, cnt : int):
+        """
+        Reads the next cnt byte(s) from the bencoded data
+        """
+        if self._indx + cnt > len(self._data):
+            return None
+        return self._data[self._indx : self._indx + cnt]
         
     def _decode_int(self):
         """
         Decoedes a bencoded integer
         """
-        num = self._read(TOKEN_END)
+        num = self._read_delim(TOKEN_END)
         return int(num)
 
     def _decode_list(self):
@@ -85,7 +92,7 @@ class Decoder:
         Decodes a bencoded list
         """
         arr = []
-        while self._next() != TOKEN_END:
+        while self._read(1) != TOKEN_END:
             arr.append(self.decode())
         self._progress()
         return arr
@@ -95,7 +102,7 @@ class Decoder:
         Decodes a bencoded dictionary
         """
         dict = OrderedDict()
-        while self._next() != TOKEN_END:
+        while self._read(1) != TOKEN_END:
             key = self.decode()
             value = self.decode()
             dict[key] = value
@@ -106,8 +113,68 @@ class Decoder:
         """
         Decodes a bencoded string
         """
-        len = int(self._read(TOKEN_SPLIT))
-        data = self._next(len)
+        len = int(self._read_delim(TOKEN_SPLIT))
+        data = self._read(len)
         self._progress(len)
         return data
             
+class Encoder:
+    """
+    Encodes a python object into a bencoded byte string
+
+    supported datatypes:
+        - int
+        - str
+        - list
+        - dict
+        - bytes
+    unspported types will return None
+    """
+    def __init__(self, obj):
+        self._obj = obj
+
+    def encode(self, obj = None):
+        if obj == None:
+            obj = self._obj
+        if type(obj) == str:
+            return self._encode_string(obj)
+        elif type(obj) == int:
+            return self._encode_int(obj)
+        elif type(obj) == list:
+            return self._encode_list(obj)
+        elif type(obj) == dict or type(obj) == OrderedDict:
+            return self._encode_dict(obj)
+        elif type(obj) == bytes:
+            return self._encode_bytes(obj)
+        else:
+            return None
+        
+    def _encode_int(self, num : int):
+        return str.encode('i' + str(num) + 'e')
+    
+    def _encode_string(self, s : str):
+        length = len(s)
+        s = str(length) + ':' + s
+        return str.encode(s)
+    
+    def _encode_list(self, arr : list):
+        res = bytearray('l', 'utf-8')
+        for x in arr:
+            res += self.encode(x)
+        res += b'e'
+        return res
+    
+    def _encode_dict(self, dic : dict):
+        res = bytearray('d', 'utf-8')
+        for k, v in dic.items():
+            k = self.encode(k)
+            v = self.encode(v)
+            if k and v:
+                res += k
+                res += v
+            else:
+                raise RuntimeError("Bad dictionary {0}".format(dic))
+        res += b'e'
+        return res
+                
+
