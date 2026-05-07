@@ -44,22 +44,22 @@ class Decoder:
         elif c in b'0123456789':
             return self._decode_string()
         else:
-            raise RuntimeError("Unknown data type at index {0}".format(str(self._indx)))
+            raise RuntimeError("unexpected token: {0} at index {1}".format(str(c), str(self._indx)))
 
     
     def _next(self, cnt = 1):
         """
         Reads the next cnt byte(s) from the bencoded data
         """
-        if self._indx + 1 >= len(self._data):
+        if self._indx + cnt > len(self._data):
             return None
-        return self._data[self._indx : self.indx + 1]
+        return self._data[self._indx : self._indx + cnt]
     
-    def _progress(self):
+    def _progress(self, cnt = 1):
         """
         Progresses to the next byte of the data
         """
-        self._indx += 1
+        self._indx += cnt
 
     def _read(self, delim):
         """
@@ -86,7 +86,7 @@ class Decoder:
         """
         arr = []
         while self._next() != TOKEN_END:
-            arr.append(self._decode_string())
+            arr.append(self.decode())
         self._progress()
         return arr
     
@@ -108,5 +108,6 @@ class Decoder:
         """
         len = int(self._read(TOKEN_SPLIT))
         data = self._next(len)
+        self._progress(len)
         return data
             
